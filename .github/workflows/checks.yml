@@ -20,7 +20,9 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    # Use the standard Intel pool while macOS ARM64 capacity is constrained.
+    # Preserve check/artifact names so branch protection still requires every job.
+    runs-on: ${{ matrix.os == 'macos-latest' && 'macos-15-intel' || matrix.os }}
     timeout-minutes: 10
     defaults:
       run:

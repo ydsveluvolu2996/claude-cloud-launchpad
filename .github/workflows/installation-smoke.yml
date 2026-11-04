@@ -1,0 +1,133 @@
+name: Installation smoke test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'codex/**']
+    paths:
+      - install.sh
+      - .mcp.json
+      - .claude/settings.json
+      - scripts/verify_installation.py
+      - .github/workflows/installation-smoke.yml
+  pull_request:
+    paths:
+      - install.sh
+      - .mcp.json
+      - .claude/settings.json
+      - scripts/verify_installation.py
+      - .github/workflows/installation-smoke.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installation-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install:
+    name: Native installation (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    env:
+      DISABLE_AUTOUPDATER: "1"
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+
+    steps:
+      - name: Check out this revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        env:
+          # Match the README's Windows clone option without changing runner-wide Git settings.
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: "false"
+        with:
+          persist-credentials: false
+
+      - name: Install current Node.js LTS
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          package-manager-cache: false
+
+      - name: Install Python for verification
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Create an isolated Claude profile and npm cache
+        env:
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-cloud-launchpad-profile
+          npm_config_cache: ${{ runner.temp }}/claude-cloud-launchpad-npm-cache
+        run: |
+          mkdir -p "$CLAUDE_CONFIG_DIR" "$npm_config_cache"
+          printf 'CLAUDE_CONFIG_DIR=%s\n' "$CLAUDE_CONFIG_DIR" >> "$GITHUB_ENV"
+          printf 'npm_config_cache=%s\n' "$npm_config_cache" >> "$GITHUB_ENV"
+
+      - name: Install native Claude Code on macOS
+        if: runner.os == 'macOS'
+        run: |
+          curl -fsSL --retry 3 https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/claude" --version
+
+      - name: Install native Claude Code on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          irm https://claude.ai/install.ps1 | iex
+          $claudeBin = Join-Path $env:USERPROFILE '.local\bin'
+          $claudeExe = Join-Path $claudeBin 'claude.exe'
+          if (-not (Test-Path $claudeExe)) {
+            throw 'The native Claude Code installer did not create claude.exe.'
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $claudeBin
+          $gitBash = Join-Path $env:ProgramFiles 'Git\bin\bash.exe'
+          if (-not (Test-Path $gitBash)) {
+            throw 'Git for Windows Bash is missing from this runner.'
+          }
+          Add-Content -Path $env:GITHUB_ENV -Value "CLAUDE_CODE_GIT_BASH_PATH=$gitBash"
+          & $claudeExe --version
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The native Windows Claude Code executable failed its version check.'
+          }
+
+      - name: Record tool versions
+        run: |
+          git --version
+          bash --version
+          node --version
+          npx --version
+          python --version
+          claude --version
+
+      - name: Install the real plugins and MCP configuration
+        run: bash install.sh
+
+      - name: Verify the fresh installation and pricing MCP handshake
+        run: python scripts/verify_installation.py 2>&1 | tee "$RUNNER_TEMP/launchpad-verification-fresh.log"
+
+      - name: Run the installer again
+        run: bash install.sh
+
+      - name: Verify the repeated installation and pricing MCP handshake
+        run: python scripts/verify_installation.py 2>&1 | tee "$RUNNER_TEMP/launchpad-verification-repeat.log"
+
+      - name: Upload verification results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installation-verification-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/launchpad-verification-fresh.log
+            ${{ runner.temp }}/launchpad-verification-repeat.log
+          if-no-files-found: warn
+          retention-days: 7

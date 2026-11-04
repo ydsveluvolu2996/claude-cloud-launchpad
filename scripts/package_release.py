@@ -162,11 +162,11 @@ Start with the [illustrated installation guide]({base}/README.md). Choose AWS, C
 
 This release adds installation choices, prerequisite checks, diagnostics, [worked examples]({base}/docs/examples.md), [selective removal and recovery]({base}/docs/removal.md), and community support files. Read the [changelog]({base}/CHANGELOG.md) for the full change list.
 
-All three profiles passed fresh installation and repeat-installation tests on native macOS and Windows Server 2025 with Git Bash. [Installation results]({installation['url']}) · [Repository checks]({checks['url']}). Tested commit: `{commit}`.
+All three profiles passed fresh installation and repeat-installation tests on native Intel macOS and Windows Server 2025 with Git Bash. [Installation results]({installation['url']}) · [Repository checks]({checks['url']}). Tested commit: `{commit}`.
 
 Download either source archive below, extract it, and follow README.md. `tested-versions.json` records the exact tools and plugins observed in all six native jobs. `SHA256SUMS` contains checksums for both archives and the version record.
 
-Windows 11 desktop, Intel Mac, and WSL/diagram workflows have not been verified end to end. Service account sign-ins, model calls, and cloud operations are outside these installation tests. Plugins and Claude Code can update independently of this release. See [compatibility and tested versions]({base}/docs/tested-versions.md).
+Windows 11 desktop and WSL/diagram workflows have not been verified end to end. Service account sign-ins, model calls, and cloud operations are outside these installation tests. Plugins and Claude Code can update independently of this release. See [compatibility and tested versions]({base}/docs/tested-versions.md).
 """
 
 

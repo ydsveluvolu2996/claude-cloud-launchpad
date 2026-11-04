@@ -142,3 +142,5 @@ jobs:
             ${{ runner.temp }}/launchpad-versions-repeat.json
           if-no-files-found: warn
           retention-days: 30
+          # Keep one current artifact per profile when a failed job is rerun.
+          overwrite: true

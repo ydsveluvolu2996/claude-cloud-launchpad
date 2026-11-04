@@ -1,3 +1,5 @@
+# shellcheck shell=bash disable=SC2034
+# This sourced helper sets shared variables consumed by both entry scripts.
 # Shared by install.sh and doctor.sh. Compatible with macOS Bash 3.2 and Git Bash.
 
 parse_options() {

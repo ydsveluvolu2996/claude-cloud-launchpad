@@ -22,7 +22,7 @@ COMMIT = "a" * 40
 
 class WorkflowEvidenceTests(unittest.TestCase):
     def setUp(self):
-        self.names = {"Repository checks (macos-latest)", "Repository checks (windows-latest)"}
+        self.names = {"Repository checks (macos-latest)", "Repository checks (windows-latest)", "ShellCheck and Ruff"}
         self.run = {
             "repository": {"full_name": "example/project"},
             "head_repository": {"full_name": "example/project"},
@@ -30,7 +30,7 @@ class WorkflowEvidenceTests(unittest.TestCase):
             "status": "completed", "conclusion": "success", "id": 123, "run_attempt": 1,
             "html_url": "https://github.com/example/project/actions/runs/123",
         }
-        self.jobs = {"total_count": 2, "jobs": [{"name": name, "status": "completed", "conclusion": "success"} for name in sorted(self.names)]}
+        self.jobs = {"total_count": 3, "jobs": [{"name": name, "status": "completed", "conclusion": "success"} for name in sorted(self.names)]}
 
     def validate(self):
         return release.validate_run(self.run, "example/project", COMMIT, ".github/workflows/checks.yml", self.names, self.jobs)
@@ -68,6 +68,20 @@ class WorkflowEvidenceTests(unittest.TestCase):
                     self.jobs["jobs"][0]["conclusion"] = condition
                 with self.assertRaises(RuntimeError):
                     self.validate()
+
+
+class CreatedReleaseTests(unittest.TestCase):
+    def test_draft_lookup_retries_visibility_delay(self):
+        with patch.object(release, "command", side_effect=[RuntimeError("Not visible yet"), '{"databaseId": 123}']), patch.object(release, "api", return_value={"id": 123, "tag_name": "v1.0.0"}) as api, patch.object(release.time, "sleep") as sleep:
+            self.assertEqual(release.find_created_release("example/project", "v1.0.0")["id"], 123)
+            api.assert_called_once_with("repos/example/project/releases/123")
+            sleep.assert_called_once_with(2)
+
+    def test_wrong_tag_is_never_accepted_and_retries_are_bounded(self):
+        with patch.object(release, "command", return_value='{"databaseId": 123}') as command, patch.object(release, "api", return_value={"tag_name": "v2.0.0"}), patch.object(release.time, "sleep"):
+            with self.assertRaisesRegex(RuntimeError, "tag mismatch"):
+                release.find_created_release("example/project", "v1.0.0")
+            self.assertEqual(command.call_count, 3)
 
 
 class VersionReportTests(unittest.TestCase):

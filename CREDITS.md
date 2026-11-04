@@ -17,3 +17,5 @@ Original Launchpad scripts, documentation, tests, and illustrations are provided
 The external repositories and downloaded packages contain their applicable license notices. Claude Code downloads plugins from their upstream sources; Launchpad does not relicense them. See [profiles.json](profiles.json) for exact marketplace identifiers and [the tested version record](docs/tested-versions.md) for the release snapshot.
 
 The setup illustrations are explanatory guides. The diagnostic demo presents output recorded from a real test installation; worked examples are labelled as instructional examples, not recorded service results.
+
+The pinned pricing package was compared byte for byte with its upstream source; see [the verification record and limits](docs/maintenance.md#pricing-package-source-verification).

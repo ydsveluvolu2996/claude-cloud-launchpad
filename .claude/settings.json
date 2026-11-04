@@ -1,0 +1,18 @@
+{
+  "extraKnownMarketplaces": {
+    "knowledge-work-plugins": {
+      "source": { "source": "github", "repo": "anthropics/knowledge-work-plugins" }
+    }
+  },
+  "enabledPlugins": {
+    "aws-core@claude-plugins-official": true,
+    "aws-agents-for-devsecops@claude-plugins-official": true,
+    "deploy-on-aws@claude-plugins-official": true,
+    "terraform@claude-plugins-official": true,
+    "github@claude-plugins-official": true,
+    "atlassian@claude-plugins-official": true,
+    "slack@claude-plugins-official": true,
+    "session-report@claude-plugins-official": true,
+    "design@knowledge-work-plugins": true
+  }
+}

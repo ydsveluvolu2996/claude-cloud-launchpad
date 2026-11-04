@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "aws-pricing-calculator": {
+      "command": "npx",
+      "args": ["-y", "sample-aws-pricing-calculator-mcp@1.3.4"]
+    }
+  }
+}

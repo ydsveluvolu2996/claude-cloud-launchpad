@@ -4,19 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main, 'codex/**']
-    paths:
-      - install.sh
-      - .mcp.json
-      - .claude/settings.json
-      - scripts/verify_installation.py
-      - .github/workflows/installation-smoke.yml
   pull_request:
-    paths:
-      - install.sh
-      - .mcp.json
-      - .claude/settings.json
-      - scripts/verify_installation.py
-      - .github/workflows/installation-smoke.yml
+  schedule:
+    - cron: '23 6 * * 1'
 
 permissions:
   contents: read
@@ -27,30 +17,33 @@ concurrency:
 
 jobs:
   install:
-    name: Native installation (${{ matrix.os }})
+    name: Native installation (${{ matrix.os }}, ${{ matrix.profile }})
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
+        profile: [aws, collaboration, full]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 35
     defaults:
       run:
         shell: bash
+        working-directory: Launchpad source
     env:
       DISABLE_AUTOUPDATER: "1"
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      LAUNCHPAD_PROFILE: ${{ matrix.profile }}
 
     steps:
-      - name: Check out this revision
+      - name: Check out this revision into a path with spaces
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         env:
-          # Match the README's Windows clone option without changing runner-wide Git settings.
           GIT_CONFIG_COUNT: "1"
           GIT_CONFIG_KEY_0: core.autocrlf
           GIT_CONFIG_VALUE_0: "false"
         with:
           persist-credentials: false
+          path: Launchpad source
 
       - name: Install current Node.js LTS
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -65,8 +58,8 @@ jobs:
 
       - name: Create an isolated Claude profile and npm cache
         env:
-          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-cloud-launchpad-profile
-          npm_config_cache: ${{ runner.temp }}/claude-cloud-launchpad-npm-cache
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/Launchpad test profile
+          npm_config_cache: ${{ runner.temp }}/Launchpad npm cache
         run: |
           mkdir -p "$CLAUDE_CONFIG_DIR" "$npm_config_cache"
           printf 'CLAUDE_CONFIG_DIR=%s\n' "$CLAUDE_CONFIG_DIR" >> "$GITHUB_ENV"
@@ -75,30 +68,42 @@ jobs:
       - name: Install native Claude Code on macOS
         if: runner.os == 'macOS'
         run: |
-          curl -fsSL --retry 3 https://claude.ai/install.sh | bash
+          installed=false
+          for attempt in 1 2 3; do
+            if curl -fsSL --retry 3 https://claude.ai/install.sh | bash && "$HOME/.local/bin/claude" --version; then
+              installed=true
+              break
+            fi
+            echo "Claude Code download did not finish (attempt $attempt of 3)."
+            if [ "$attempt" -lt 3 ]; then sleep 10; fi
+          done
+          "$installed"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          "$HOME/.local/bin/claude" --version
 
       - name: Install native Claude Code on Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          irm https://claude.ai/install.ps1 | iex
           $claudeBin = Join-Path $env:USERPROFILE '.local\bin'
           $claudeExe = Join-Path $claudeBin 'claude.exe'
-          if (-not (Test-Path $claudeExe)) {
-            throw 'The native Claude Code installer did not create claude.exe.'
+          $installed = $false
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            & pwsh -NoProfile -Command 'irm https://claude.ai/install.ps1 | iex'
+            if ($LASTEXITCODE -eq 0 -and (Test-Path $claudeExe)) {
+              & $claudeExe --version
+              if ($LASTEXITCODE -eq 0) {
+                $installed = $true
+                break
+              }
+            }
+            Write-Host "Claude Code download did not finish (attempt $attempt of 3)."
+            if ($attempt -lt 3) { Start-Sleep -Seconds 10 }
           }
+          if (-not $installed) { throw 'Native Claude Code installation failed after 3 attempts.' }
           Add-Content -Path $env:GITHUB_PATH -Value $claudeBin
           $gitBash = Join-Path $env:ProgramFiles 'Git\bin\bash.exe'
-          if (-not (Test-Path $gitBash)) {
-            throw 'Git for Windows Bash is missing from this runner.'
-          }
+          if (-not (Test-Path $gitBash)) { throw 'Git for Windows Bash is missing from this runner.' }
           Add-Content -Path $env:GITHUB_ENV -Value "CLAUDE_CODE_GIT_BASH_PATH=$gitBash"
-          & $claudeExe --version
-          if ($LASTEXITCODE -ne 0) {
-            throw 'The native Windows Claude Code executable failed its version check.'
-          }
 
       - name: Record tool versions
         run: |
@@ -109,25 +114,31 @@ jobs:
           python --version
           claude --version
 
-      - name: Install the real plugins and MCP configuration
-        run: bash install.sh
+      - name: Install the selected real plugins and MCP configuration
+        run: bash install.sh --profile "$LAUNCHPAD_PROFILE"
 
-      - name: Verify the fresh installation and pricing MCP handshake
-        run: python scripts/verify_installation.py 2>&1 | tee "$RUNNER_TEMP/launchpad-verification-fresh.log"
+      - name: Run the beginner setup check
+        run: bash doctor.sh --profile "$LAUNCHPAD_PROFILE" 2>&1 | tee "$RUNNER_TEMP/launchpad-doctor.log"
+
+      - name: Verify the fresh installation
+        run: python scripts/verify_installation.py --profile "$LAUNCHPAD_PROFILE" --report "$RUNNER_TEMP/launchpad-versions-fresh.json" 2>&1 | tee "$RUNNER_TEMP/launchpad-verification-fresh.log"
 
       - name: Run the installer again
-        run: bash install.sh
+        run: bash install.sh --profile "$LAUNCHPAD_PROFILE"
 
-      - name: Verify the repeated installation and pricing MCP handshake
-        run: python scripts/verify_installation.py 2>&1 | tee "$RUNNER_TEMP/launchpad-verification-repeat.log"
+      - name: Verify the repeated installation
+        run: python scripts/verify_installation.py --profile "$LAUNCHPAD_PROFILE" --report "$RUNNER_TEMP/launchpad-versions-repeat.json" 2>&1 | tee "$RUNNER_TEMP/launchpad-verification-repeat.log"
 
-      - name: Upload verification results
+      - name: Upload sanitized verification results and tested versions
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: installation-verification-${{ matrix.os }}
+          name: installation-verification-${{ matrix.os }}-${{ matrix.profile }}
           path: |
+            ${{ runner.temp }}/launchpad-doctor.log
             ${{ runner.temp }}/launchpad-verification-fresh.log
             ${{ runner.temp }}/launchpad-verification-repeat.log
+            ${{ runner.temp }}/launchpad-versions-fresh.json
+            ${{ runner.temp }}/launchpad-versions-repeat.json
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 30

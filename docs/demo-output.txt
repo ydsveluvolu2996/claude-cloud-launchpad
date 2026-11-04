@@ -1,0 +1,27 @@
+Claude Cloud Launchpad v1.0.0 — recorded diagnostic output
+Recorded 2026-11-04 on macOS 27.2 (Apple silicon), Claude Code 2.1.318, Node.js v24.18.0.
+Uses an isolated profile with real installed plugins and a live pricing MCP connection.
+No service account sign-ins, model calls, or cloud-tool calls were performed.
+The GIF replays this transcript at a readable pace; it is not a screen recording.
+
+$ bash doctor.sh --profile full
+Claude Cloud Launchpad — check full setup
+PASS git is available.
+PASS node is available.
+PASS claude is available.
+PASS npx is available.
+PASS aws-core is installed and enabled.
+PASS aws-agents-for-devsecops is installed and enabled.
+PASS deploy-on-aws is installed and enabled.
+PASS terraform is installed and enabled.
+PASS github is installed and enabled.
+PASS atlassian is installed and enabled.
+PASS slack is installed and enabled.
+PASS session-report is installed and enabled.
+PASS design is installed and enabled.
+Checking the pricing connection (the first check may download its package)...
+PASS Pricing connector is connected from outside this setup folder.
+
+Your selected Launchpad setup is ready.
+Next: start Claude Code in your project. Optional services may still need your own sign-in.
+See README.md → Connect the tools you need.

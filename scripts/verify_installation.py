@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Verify a real installation in CLAUDE_CONFIG_DIR without calling cloud tools."""
 
+import argparse
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import platform
 import queue
 import re
 import shutil
@@ -16,8 +19,6 @@ import time
 
 
 REPO = Path(__file__).resolve().parents[1]
-SERVER = "aws-pricing-calculator"
-PACKAGE = "sample-aws-pricing-calculator-mcp@1.3.4"
 
 
 def require(condition, message):
@@ -200,10 +201,14 @@ def run(command, cwd, timeout=180):
         process.stderr.close()
 
 
-def verify_plugins(claude, neutral):
-    expected = set(json.loads((REPO / ".claude/settings.json").read_text())["enabledPlugins"])
+def verify_plugins(claude, neutral, expected):
+    expected = set(expected)
     installed = json.loads(run([claude, "plugin", "list", "--json"], neutral))
     require(isinstance(installed, list), "Unexpected plugin list JSON format")
+    actual = {entry.get("id") for entry in installed}
+    require(actual == expected, f"Wrong plugin selection: missing {sorted(expected - actual)}; unexpected {sorted(actual - expected)}")
+    require(len(installed) == len(expected), "Unexpected duplicate plugin installation")
+    versions = []
     for plugin_id in sorted(expected):
         matches = [item for item in installed if item.get("id") == plugin_id and item.get("scope") == "user"]
         require(len(matches) == 1, f"Missing or duplicate user-scoped plugin: {plugin_id}")
@@ -216,9 +221,11 @@ def verify_plugins(claude, neutral):
         assets.extend(install_path.glob("skills/*/SKILL.md"))
         require(any(path.is_file() and path.stat().st_size for path in assets), f"Plugin files missing: {plugin_id}")
         print(f"PASS plugin {plugin_id} ({entry.get('version', 'unknown version')}, user scope)", flush=True)
+        versions.append({"id": plugin_id, "version": entry.get("version"), "scope": "user"})
+    return versions
 
 
-def npx_launch_command():
+def npx_launch_command(package):
     node = shutil.which("node")
     npx = shutil.which("npx") or shutil.which("npx.cmd")
     require(node and npx, "Node.js and npx must be installed")
@@ -233,12 +240,12 @@ def npx_launch_command():
     ]
     entry = next((path for path in candidates if path and path.is_file()), None)
     require(entry is not None, "Cannot locate npm's npx-cli.js")
-    return [node, str(entry), "-y", PACKAGE]
+    return [node, str(entry), "-y", package]
 
 
-def check_pricing_protocol(neutral):
+def check_pricing_protocol(neutral, package):
     process = start_process(
-        npx_launch_command(), cwd=neutral, stdin=subprocess.PIPE,
+        npx_launch_command(package), cwd=neutral, stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         encoding="utf-8", errors="replace", bufsize=1,
     )
@@ -294,6 +301,7 @@ def check_pricing_protocol(neutral):
         tools = receive(2).get("tools", [])
         require(len(tools) > 0 and all(tool.get("name") and tool.get("inputSchema") for tool in tools), "Pricing server returned no valid tools")
         print(f"PASS live pricing MCP initialize + tools/list ({len(tools)} tools; no tools called)", flush=True)
+        return {"protocol": initialized["protocolVersion"], "tool_count": len(tools), "tools_called": False}
     finally:
         if process.stdin and not process.stdin.closed:
             try:
@@ -308,37 +316,72 @@ def check_pricing_protocol(neutral):
         process.stderr.close()
 
 
+def read_config(config):
+    path = config / ".claude.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", choices=("aws", "collaboration", "full"), default="full")
+    parser.add_argument("--report", type=Path, help="Save a sanitized JSON record of tested versions")
+    args = parser.parse_args()
+    manifest = json.loads((REPO / "profiles.json").read_text(encoding="utf-8"))
+    pricing_spec = manifest["pricing"]
+    server, package = pricing_spec["name"], pricing_spec["package"]
+    needs_pricing = args.profile in pricing_spec["profiles"]
     config_value = os.environ.get("CLAUDE_CONFIG_DIR")
     require(config_value, "Set CLAUDE_CONFIG_DIR to an isolated test profile first")
     config = Path(config_value).resolve()
     require(config != (Path.home() / ".claude").resolve(), "Do not test against your personal Claude profile")
     claude = shutil.which("claude")
     require(claude, "Claude Code CLI is not installed")
-    saved = json.loads((config / ".claude.json").read_text())
-    pricing = saved.get("mcpServers", {}).get(SERVER)
-    require(pricing and pricing.get("command") == "npx" and pricing.get("args") == ["-y", PACKAGE], "Missing or unexpected user-scoped pricing MCP configuration")
-    before = dict(pricing)
+    saved = read_config(config)
+    pricing = saved.get("mcpServers", {}).get(server)
+    if needs_pricing:
+        require(pricing and pricing.get("command") == "npx" and pricing.get("args") == ["-y", package], "Missing or unexpected user-scoped pricing MCP configuration")
+        print("PASS pricing MCP is saved in the isolated user profile", flush=True)
+    else:
+        require(pricing is None, "Collaboration-only setup unexpectedly added the pricing MCP")
+        print("PASS collaboration-only setup did not add the pricing MCP", flush=True)
+    before = pricing
     baseline_path = config / "launchpad-test-pricing-baseline.json"
     if baseline_path.exists():
         require(json.loads(baseline_path.read_text()) == pricing, "Pricing configuration changed since previous verification")
         print("PASS pricing configuration unchanged since previous verification", flush=True)
     else:
         baseline_path.write_text(json.dumps(pricing, sort_keys=True), encoding="utf-8")
-    print("PASS pricing MCP is saved in the isolated user profile", flush=True)
-    with tempfile.TemporaryDirectory(prefix="launchpad-verify-") as neutral:
-        print("Claude Code " + run([claude, "--version"], neutral).strip(), flush=True)
-        print("Node.js " + run([shutil.which("node"), "--version"], neutral).strip(), flush=True)
-        verify_plugins(claude, neutral)
-        check_pricing_protocol(neutral)
-        status = run([claude, "mcp", "get", SERVER], neutral)
-        status = re.sub(r"\x1b\[[0-9;]*m", "", status)
-        require(re.search(r"Status:\s*(?:[✓✔]\s*)?Connected(?:\s|$)", status), "Claude could not connect using the registered npx command: " + status[-1500:])
-        require("User config" in status, "Claude did not resolve the user-scoped MCP configuration")
-        print("PASS Claude connects to the user-scoped pricing server from another folder", flush=True)
-    after = json.loads((config / ".claude.json").read_text())["mcpServers"][SERVER]
+    report = {
+        "verified_at": datetime.now(timezone.utc).isoformat(),
+        "profile": args.profile,
+        "platform": {"system": platform.system(), "release": platform.release(), "version": platform.version(), "machine": platform.machine()},
+        "python": platform.python_version(),
+    }
+    if platform.system() == "Darwin":
+        report["platform"]["macos_version"] = platform.mac_ver()[0]
+    elif platform.system() == "Windows":
+        report["platform"]["windows_version"] = list(platform.win32_ver())
+    with tempfile.TemporaryDirectory(prefix="launchpad verify ") as neutral:
+        report["claude"] = run([claude, "--version"], neutral).strip()
+        report["node"] = run([shutil.which("node"), "--version"], neutral).strip()
+        print("Claude Code " + report["claude"], flush=True)
+        print("Node.js " + report["node"], flush=True)
+        report["plugins"] = verify_plugins(claude, neutral, manifest["profiles"][args.profile])
+        if needs_pricing:
+            report["pricing"] = {"package": package, **check_pricing_protocol(neutral, package)}
+            status = run([claude, "mcp", "get", server], neutral)
+            status = re.sub(r"\x1b\[[0-9;]*m", "", status)
+            require(re.search(r"Status:\s*(?:[✓✔]\s*)?Connected(?:\s|$)", status), "Claude could not connect using the registered npx command: " + status[-1500:])
+            require("User config" in status, "Claude did not resolve the user-scoped MCP configuration")
+            print("PASS Claude connects to the user-scoped pricing server from another folder", flush=True)
+        else:
+            report["pricing"] = None
+    after = read_config(config).get("mcpServers", {}).get(server)
     require(before == after, "Verification modified the pricing server configuration")
     print("PASS verification finished without calling cloud tools or changing the MCP entry", flush=True)
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

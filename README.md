@@ -2,17 +2,25 @@
 
 [![Installation smoke test](https://github.com/ydsveluvolu2996/claude-cloud-launchpad/actions/workflows/installation-smoke.yml/badge.svg?branch=main)](https://github.com/ydsveluvolu2996/claude-cloud-launchpad/actions/workflows/installation-smoke.yml)
 
-A beginner-friendly way to add AWS, Terraform, collaboration, and design tools to Claude Code on **macOS or Windows**.
+A beginner-friendly way to add AWS, Terraform, collaboration, and design tools to Claude Code on **macOS or Windows**. Choose the tools you need, run setup, and check that they work.
 
-[Start here](#start-here) · [macOS guide](#install-on-macos) · [Windows guide](#install-on-windows) · [First use](#try-your-first-session) · [Help](#troubleshooting)
+[Download v1.0.0](https://github.com/ydsveluvolu2996/claude-cloud-launchpad/releases/tag/v1.0.0) · [MIT license](LICENSE) · [Tested versions](docs/tested-versions.md)
+
+![A real diagnostic run checking Claude Code, installed plugins, and the pricing connector.](docs/images/demo.gif)
+
+*Replay of real diagnostic output from an isolated Mac installation, paced for readability. [Read the accessible text output](docs/demo-output.txt). This checks installation and the pricing connection; it does not demonstrate authenticated cloud operations.*
+
+[Start here](#start-here) · [macOS](#install-on-macos) · [Windows](#install-on-windows) · [Check setup](#check-my-setup) · [Examples](docs/examples.md) · [Remove tools](docs/removal.md) · [Help](#get-help-or-contribute)
 
 ## Start here
 
-You will install a few basic apps, sign in to Claude Code, and run one setup script. The script adds **nine plugins** and an **AWS Pricing Calculator connector**. A plugin gives Claude extra capabilities; a connector, also called an MCP server, lets it work with another tool or service.
+You will install a few basic apps, sign in to Claude Code, and run one setup script. The default **Full** setup adds **nine plugins** and an **AWS Pricing Calculator connector**. You can choose a smaller setup below. A plugin gives Claude extra capabilities; a connector, also called an MCP server, lets it work with another tool or service.
 
 **You need:** an internet connection and an account or provider configuration that can use Claude Code. The **Claude Code terminal app** is required; using the Claude website or installing Claude Desktop alone does not guarantee that the `claude` terminal command is available.
 
 Choose **one** guide below. You can connect AWS, GitHub, Slack, and other services later, when you need them. Each person uses their own accounts and credentials.
+
+**Cost:** Launchpad's installer is free to use under the MIT license. Claude Code access and any third-party services you use have their own account requirements, limits, and charges. Installing Launchpad does not create AWS resources.
 
 **How to follow this guide**
 
@@ -20,6 +28,20 @@ Choose **one** guide below. You can connect AWS, GitHub, Slack, and other servic
 - Copy commands from the text boxes, one line at a time. Press **Enter** after each line and wait for it to finish.
 - Commands such as `git clone` go in your terminal. Commands beginning with `/`, such as `/plugin`, go **inside Claude Code**.
 - The pictures are illustrated overviews. Use the selectable command text below them for installation.
+
+## Choose your tools
+
+A **profile** is a group of tools to install. At the final step of either guide, run **one** of these commands:
+
+| What you want | Command | What it adds |
+|---|---|---|
+| Everything | `bash install.sh` | All nine plugins and the pricing connector |
+| AWS and Terraform | `bash install.sh --profile aws` | Five plugins and the pricing connector |
+| GitHub, Slack, Atlassian, and design | `bash install.sh --profile collaboration` | Five plugins; no pricing connector |
+
+The guides use Full setup. To choose a smaller profile, replace their final `bash install.sh` line with the command above. All profiles include `session-report`. You can add another profile later; doing so adds its tools and keeps the tools you already have. See [the full list](#whats-included).
+
+Before installing anything, the script checks that its required apps are available. It changes Claude settings for your **user account**, so installed tools are available from other project folders too.
 
 ## Install on macOS
 
@@ -78,16 +100,16 @@ In **Terminal**, run:
 
 ```bash
 cd "$HOME"
-git clone https://github.com/ydsveluvolu2996/claude-cloud-launchpad.git
+git clone --branch v1.0.0 --single-branch https://github.com/ydsveluvolu2996/claude-cloud-launchpad.git
 cd claude-cloud-launchpad
 bash install.sh
 ```
 
-The first command goes to your home folder. The next downloads this repository into a new `claude-cloud-launchpad` folder. The last installs the plugins and configures the pricing connector for your user account.
+The first command goes to your home folder. The next downloads the **v1.0.0 release** into a new `claude-cloud-launchpad` folder. The last installs Full setup for your user account. Git may display “detached HEAD”: that is normal when downloading a fixed release. You do not need to change it.
 
 **What success looks like:** the final summary says **`Done. Setup completed.`** You will also see a list of next steps. If it says **`Finished with errors`**, use the error message and the troubleshooting table below, then retry.
 
-Continue to [Try your first session](#try-your-first-session).
+Continue to [Check my setup](#check-my-setup).
 
 ## Install on Windows
 
@@ -143,16 +165,30 @@ Run these commands in **Git Bash**, not PowerShell:
 
 ```bash
 cd "$HOME"
-git clone --config core.autocrlf=false https://github.com/ydsveluvolu2996/claude-cloud-launchpad.git
+git clone --config core.autocrlf=false --branch v1.0.0 --single-branch https://github.com/ydsveluvolu2996/claude-cloud-launchpad.git
 cd claude-cloud-launchpad
 bash install.sh
 ```
 
-The clone option keeps the script's line endings compatible with Bash. Keep it exactly as shown.
+The clone command downloads **v1.0.0** and keeps the script's line endings compatible with Bash. Keep it exactly as shown. Git may display “detached HEAD”: that is normal for a fixed release.
 
 **What success looks like:** the final summary says **`Done. Setup completed.`** If it says **`Finished with errors`**, use the error details below it or in the preceding output to fix the problem, then retry.
 
 Continue to the next section.
+
+## Check my setup
+
+Stay in the `claude-cloud-launchpad` folder, in **Terminal or Git Bash**. Run the command for the profile you installed:
+
+| Your installation | Check command |
+|---|---|
+| Full | `bash doctor.sh` |
+| AWS | `bash doctor.sh --profile aws` |
+| Collaboration | `bash doctor.sh --profile collaboration` |
+
+The checker reports which prerequisites and selected plugins are ready. For Full and AWS, it also checks the user-scoped pricing connection. Its first connection may take longer while `npx` downloads the pricing package. Follow the next-step message for anything marked as needing setup, then run the check again.
+
+The checker does not install plugins or edit your configuration. Connecting the pricing server can download its pinned package into npm's cache. It does not call cloud tools, make model requests, or sign in to your accounts. A successful check covers basic setup; optional service accounts still need the configuration below.
 
 ## Try your first session
 
@@ -173,8 +209,8 @@ If Claude asks whether you trust this folder, review the prompt. This is the pra
 /mcp
 ```
 
-- **`/plugin`** shows installed plugins. Check that the nine plugins in [What's included](#whats-included) are listed.
-- **`/mcp`** shows connectors and whether they are connected or need configuration. Find `aws-pricing-calculator`. On its first run, `npx` may need time to download the pricing package.
+- **`/plugin`** shows installed plugins. Check that the plugins for your chosen profile in [What's included](#whats-included) are listed.
+- **`/mcp`** shows connectors and whether they are connected or need configuration. For Full or AWS, find `aws-pricing-calculator`. Collaboration setup does not add it.
 - Optional services may show as disconnected until you install their extra software or sign in. Follow [Connect the tools you need](#connect-the-tools-you-need) for those features.
 
 ### Prompts you can try
@@ -189,6 +225,8 @@ Type one of these **inside Claude Code** in your own words:
 
 The calculator estimates costs; creating an estimate does not create AWS resources. Real cloud operations require your own AWS account configuration and permissions.
 
+Follow the [three worked examples](docs/examples.md) for a cost estimate, a Terraform explanation, and a design review. Each includes prerequisites, a copyable prompt, and an illustrative result to help you judge the response.
+
 ### How to open it next time
 
 Open **Terminal** or **Git Bash**, go to the folder you want to work in, and run `claude`. You do not need to rerun the installer for every session.
@@ -202,7 +240,7 @@ claude
 
 ## Connect the tools you need
 
-**Basic setup is complete once the plugins are installed and the pricing connector works.** Set up the following only for the features you plan to use.
+**Basic setup is complete when the checker passes for your chosen profile.** Set up the following only for the features you plan to use.
 
 | I want to use… | What to do next |
 |---|---|
@@ -265,18 +303,20 @@ Native Git Bash remains suitable for the basic installation. Its diagram hook ad
 
 ## What's included
 
-| Plugin or connector | What it helps with |
-|---|---|
-| `aws-core` | AWS APIs, infrastructure, containers, monitoring, and billing |
-| `aws-agents-for-devsecops` | Investigations, release readiness, and vulnerability scans |
-| `deploy-on-aws` | Architecture diagrams and cost estimates |
-| `terraform` | Terraform provider and module documentation |
-| `github` | Repositories, pull requests, and issues |
-| `atlassian` | Jira and Confluence |
-| `slack` | Channels and conversations |
-| `session-report` | Claude Code usage and cost reports |
-| `design` | Design critique, UX writing, accessibility, and handoff |
-| `aws-pricing-calculator` (MCP connector) | AWS Pricing Calculator estimates and shareable links |
+| Plugin or connector | What it helps with | Profiles |
+|---|---|---|
+| `aws-core` | AWS APIs, infrastructure, containers, monitoring, and billing | AWS, Full |
+| `aws-agents-for-devsecops` | Investigations, release readiness, and vulnerability scans | AWS, Full |
+| `deploy-on-aws` | Architecture diagrams and cost estimates | AWS, Full |
+| `terraform` | Terraform provider and module documentation | AWS, Full |
+| `github` | Repositories, pull requests, and issues | Collaboration, Full |
+| `atlassian` | Jira and Confluence | Collaboration, Full |
+| `slack` | Channels and conversations | Collaboration, Full |
+| `session-report` | Claude Code usage and cost reports | All |
+| `design` | Design critique, UX writing, accessibility, and handoff | Collaboration, Full |
+| `aws-pricing-calculator` (MCP connector) | AWS Pricing Calculator estimates and shareable links | AWS, Full |
+
+The exact plugin IDs and profile membership live in [profiles.json](profiles.json). Choosing a smaller profile does not remove plugins installed previously; use the [selective removal guide](docs/removal.md) when you want to stop using a tool.
 
 ## Troubleshooting
 
@@ -287,30 +327,70 @@ Native Git Bash remains suitable for the basic installation. Its diagram hook ad
 | `bash` is not recognized in PowerShell | Open **Git Bash** from the Start menu and continue there. |
 | “Destination path … already exists” when cloning | You already have a folder with that name. If it is this setup, enter `cd "$HOME/claude-cloud-launchpad"` and use the update steps below. Do not delete a folder containing your own work. |
 | Errors mentioning `\r` or `^M` on Windows | Use a fresh clone with `--config core.autocrlf=false`, as shown in the Windows guide. |
-| “Finished with errors” | Read the specific error above the summary. Check internet access, missing prerequisites, and organization policy, then retry the installer. |
+| A prerequisite is missing, or setup finishes with errors | Follow the named app's installation step above, reopen the terminal, then retry your chosen profile. Run `bash doctor.sh` with the same profile to find what still needs attention. |
 | A connector is disconnected | Open `/mcp` in Claude. Check its sign-in and prerequisites: Terraform needs running Docker; AWS tools need `uvx`. |
-| Pricing works only inside the setup folder | Rerun the current installer, then verify from the separate practice folder. |
+| Pricing works only in one project folder | A project may have its own connector settings. Run the checker from this release and inspect `/mcp` in the affected project; user and project settings can differ. |
 | GitHub authentication fails | Ensure your own `GITHUB_PERSONAL_ACCESS_TOKEN` is available to the terminal that launches Claude. Never paste it into an issue. |
 | Diagram validation fails | Use the optional diagram guide and verify `python3` can import `defusedxml`, and `timeout --version` identifies GNU coreutils. |
 
-To retry setup, first type `/exit` if you are inside Claude. Then, in **Terminal or Git Bash**:
+To retry Full setup, first type `/exit` if you are inside Claude. Then, in **Terminal or Git Bash**:
 
 ```bash
 cd "$HOME/claude-cloud-launchpad"
 bash install.sh
 ```
 
-## Update this setup
+If you chose AWS or Collaboration, add the same `--profile aws` or `--profile collaboration` to both installer and checker commands.
 
-In **Terminal or Git Bash**:
+## Update or remove this setup
+
+The beginner guides install a fixed release. Check [Releases](https://github.com/ydsveluvolu2996/claude-cloud-launchpad/releases) and read the next version's notes before updating. A Git tag pins Launchpad's files; it does **not** pin marketplace plugin versions or the Claude Code app.
+
+To return to the published v1.0.0 files, run these commands in **Terminal or Git Bash**:
 
 ```bash
 cd "$HOME/claude-cloud-launchpad"
-git pull --ff-only
-bash install.sh
+git status --short
 ```
 
-To update installed plugin versions, use the update controls in `/plugin` inside Claude. Pulling this repository alone does not update every plugin. The pricing package is deliberately pinned to `sample-aws-pricing-calculator-mcp@1.3.4`; rerunning setup preserves an existing user-scoped pricing-server configuration.
+If that prints changed files, save your work before switching releases. When the working folder is clean:
+
+```bash
+git fetch --tags origin
+git checkout --detach v1.0.0
+bash install.sh
+bash doctor.sh
+```
+
+For a future release, replace `v1.0.0` with the exact published tag from its release notes. Add your chosen `--profile` to the last two commands if you use a smaller setup. Do not use `git pull` while checked out at a release tag.
+
+To update installed plugin versions, use the update controls in `/plugin` inside Claude. The pricing package is deliberately pinned to `sample-aws-pricing-calculator-mcp@1.3.4`; rerunning setup preserves an existing user-scoped pricing-server configuration. Read future release notes for any connector migration instructions.
+
+To pause a plugin, remove selected tools, or recover from a failed setup, follow [Remove tools and recover](docs/removal.md). Deleting the downloaded folder alone does not uninstall user-scoped plugins.
+
+## Compatibility and test coverage
+
+| Environment | What has been checked |
+|---|---|
+| Apple silicon Mac, macOS 26.6.2 | Real installation and repeat installation in native CI |
+| Apple silicon Mac, macOS 27.2 | Real installation in a separate local test profile |
+| Windows Server 2025 x64 with Git Bash | Real native Windows installation and repeat installation in CI |
+| Windows 11 desktop | Not yet verified by this project with a beginner walkthrough |
+| Intel Mac | Not yet verified by this project |
+| Linux / WSL 2 and optional diagram tooling | Instructions are included where relevant; this release does not claim those paths were tested end to end |
+
+See the [tested version record](docs/tested-versions.md) for the release evidence and [current automated results](https://github.com/ydsveluvolu2996/claude-cloud-launchpad/actions/workflows/installation-smoke.yml) for later upstream changes. A passing installation check does not verify your AWS, GitHub, Slack, or Atlassian account access.
+
+## Get help or contribute
+
+- Start with [Troubleshooting](#troubleshooting) and [Check my setup](#check-my-setup).
+- For an installation problem, [open a bug report](https://github.com/ydsveluvolu2996/claude-cloud-launchpad/issues/new?template=bug_report.yml) with your OS, versions, chosen profile, and a sanitized error message.
+- For an improvement, [request a feature](https://github.com/ydsveluvolu2996/claude-cloud-launchpad/issues/new?template=feature_request.yml) or read [Contributing](CONTRIBUTING.md).
+- For a vulnerability or exposed credential, use the [private security-reporting instructions](SECURITY.md).
+
+Community support covers this repository's installer, checker, and documentation. Account billing, organization policies, and bugs inside upstream tools may need their provider's support. Maintainers respond as availability permits.
+
+Launchpad is an independent community project, not an official Anthropic or AWS product. Original project files are [MIT licensed](LICENSE); upstream plugins and services keep their own licenses and terms. See [Credits](CREDITS.md), [Changelog](CHANGELOG.md), and our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 <details>
 <summary><strong>Technical details, validation, and official references</strong></summary>
@@ -318,8 +398,8 @@ To update installed plugin versions, use the update controls in `/plugin` inside
 ### Where settings apply
 
 - `install.sh` installs plugins and the pricing server at **user scope**, so they can be used in other project folders.
-- `.claude/settings.json` enables/recommends the same plugins when you open this checkout.
-- `.mcp.json` supplies the pricing server at **project scope** in this checkout. Project settings take precedence over a same-name user setting; that is why the first-use guide starts in a separate practice folder.
+- `profiles.json` selects tools explicitly. This release does not ship project-scoped plugin settings or an MCP override that silently enables a different profile.
+- Your own projects may have settings that take precedence over user settings; inspect `/plugin` and `/mcp` in the project where you work.
 - Existing user-scoped pricing-server settings are preserved. To inspect them, run `claude mcp get aws-pricing-calculator` from outside this checkout; this may start a server connection check.
 - Current Claude Code supports plain `npx` on native Windows; the old `cmd /c` workaround is not required.
 
@@ -329,13 +409,14 @@ The [installation workflow](https://github.com/ydsveluvolu2996/claude-cloud-laun
 
 Each job uses a fresh Claude profile and npm cache, installs the official Claude Code CLI and current Node.js LTS, then checks:
 
-- All nine plugins are installed and enabled at user scope, with their files present.
-- The pinned pricing connector is saved in the user profile.
-- The actual pricing server responds to MCP initialization and lists its tools.
-- Claude can connect using the registered `npx` command from a different folder.
+- Selected plugins are installed and enabled at user scope, with their files present.
+- For Full and AWS, the pinned pricing connector is saved in the user profile.
+- For Full and AWS, the actual pricing server responds to MCP initialization and lists its tools.
+- Claude can connect to the pricing server using the registered `npx` command from a different folder.
+- Collaboration setup does not add the pricing connector.
 - Running the installer again succeeds and preserves the existing pricing configuration.
 
-Bash/JSON checks and earlier simulated failure-path tests supplement these real installation checks. Verification logs are available as workflow artifacts. The installer returns a nonzero status when a required step fails.
+Isolated failure-path tests supplement the real installation checks, including missing prerequisites, profile selection, and paths containing spaces. Verification logs are available as workflow artifacts. The installer and checker return a nonzero status when a required step fails.
 
 These checks do not sign in to your service accounts, make model API calls, deploy resources, or invoke cloud tools. AWS, GitHub, Slack, Atlassian, Terraform, and optional diagram dependencies still need the feature-specific setup described above. A passing installation test does not certify those authenticated integrations for your accounts.
 

@@ -1,0 +1,38 @@
+{
+  "marketplaces": {
+    "claude-plugins-official": "anthropics/claude-plugins-official",
+    "knowledge-work-plugins": "anthropics/knowledge-work-plugins"
+  },
+  "profiles": {
+    "aws": [
+      "aws-core@claude-plugins-official",
+      "aws-agents-for-devsecops@claude-plugins-official",
+      "deploy-on-aws@claude-plugins-official",
+      "terraform@claude-plugins-official",
+      "session-report@claude-plugins-official"
+    ],
+    "collaboration": [
+      "github@claude-plugins-official",
+      "atlassian@claude-plugins-official",
+      "slack@claude-plugins-official",
+      "session-report@claude-plugins-official",
+      "design@knowledge-work-plugins"
+    ],
+    "full": [
+      "aws-core@claude-plugins-official",
+      "aws-agents-for-devsecops@claude-plugins-official",
+      "deploy-on-aws@claude-plugins-official",
+      "terraform@claude-plugins-official",
+      "github@claude-plugins-official",
+      "atlassian@claude-plugins-official",
+      "slack@claude-plugins-official",
+      "session-report@claude-plugins-official",
+      "design@knowledge-work-plugins"
+    ]
+  },
+  "pricing": {
+    "name": "aws-pricing-calculator",
+    "package": "sample-aws-pricing-calculator-mcp@1.3.4",
+    "profiles": ["aws", "full"]
+  }
+}

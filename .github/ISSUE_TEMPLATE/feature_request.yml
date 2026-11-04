@@ -1,0 +1,23 @@
+name: Suggest an improvement
+description: Propose a clearer guide, a useful feature, or another improvement.
+title: "[Idea]: "
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What would you like to do?
+      description: Describe the task and where the current setup gets in your way.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: What change would help?
+      description: Include an example of how a beginner would use it.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or related tools
+      description: Optional. Share public links only; do not include credentials or private information.

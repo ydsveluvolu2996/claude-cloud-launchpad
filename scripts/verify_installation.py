@@ -2,7 +2,7 @@
 """Verify a real installation in CLAUDE_CONFIG_DIR without calling cloud tools."""
 
 import argparse
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -24,6 +24,25 @@ REPO = Path(__file__).resolve().parents[1]
 def require(condition, message):
     if not condition:
         raise RuntimeError(message)
+
+
+def check_initialization(result):
+    """Probe the common initialize/tools-list subset, including newer date versions."""
+    require(isinstance(result, dict), "Malformed MCP initialization result")
+    version = result.get("protocolVersion")
+    require(isinstance(version, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", version),
+            "Missing or malformed MCP protocol version")
+    try:
+        negotiated = date.fromisoformat(version)
+    except ValueError as exc:
+        raise RuntimeError("Invalid MCP protocol version date") from exc
+    require(negotiated >= date(2024, 11, 5), "MCP protocol predates the supported tools-list probe")
+    capabilities = result.get("capabilities")
+    require(isinstance(capabilities, dict) and isinstance(capabilities.get("tools"), dict),
+            "Pricing server did not advertise tools")
+    # Actual tools/list must still succeed below. This is a compatibility probe,
+    # not a claim to implement every feature in a future protocol revision.
+    return version
 
 
 class WindowsProcessJob:
@@ -294,14 +313,13 @@ def check_pricing_protocol(neutral, package):
             "clientInfo": {"name": "claude-cloud-launchpad-test", "version": "1.0.0"},
         }})
         initialized = receive(1)
-        require(initialized.get("protocolVersion") in {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}, "Unsupported MCP protocol version")
-        require("tools" in initialized.get("capabilities", {}), "Pricing server did not advertise tools")
+        protocol = check_initialization(initialized)
         send({"method": "notifications/initialized"})
         send({"id": 2, "method": "tools/list", "params": {}})
         tools = receive(2).get("tools", [])
         require(len(tools) > 0 and all(tool.get("name") and tool.get("inputSchema") for tool in tools), "Pricing server returned no valid tools")
         print(f"PASS live pricing MCP initialize + tools/list ({len(tools)} tools; no tools called)", flush=True)
-        return {"protocol": initialized["protocolVersion"], "tool_count": len(tools), "tools_called": False}
+        return {"protocol": protocol, "tool_count": len(tools), "tools_called": False}
     finally:
         if process.stdin and not process.stdin.closed:
             try:

@@ -405,11 +405,10 @@ To pause a plugin, remove selected tools, or recover from a failed setup, follow
 
 | Environment | What has been checked |
 |---|---|
-| Apple silicon Mac, macOS 26.6.2 | Real installation and repeat installation in native CI |
+| Intel Mac (`macos-15-intel` CI runner) | Real installation and repeat installation in native CI |
 | Apple silicon Mac, macOS 27.2 | Real installation in a separate local test profile |
 | Windows Server 2025 x64 with Git Bash | Real native Windows installation and repeat installation in CI |
 | Windows 11 desktop | Not yet verified by this project with a beginner walkthrough |
-| Intel Mac | Not yet verified by this project |
 | Linux / WSL 2 and optional diagram tooling | Instructions are included where relevant; this release does not claim those paths were tested end to end |
 
 See the [tested version record](docs/tested-versions.md) for the release evidence and [current automated results](https://github.com/ydsveluvolu2996/claude-cloud-launchpad/actions/workflows/installation-smoke.yml) for later upstream changes. A passing installation check does not verify your AWS, GitHub, Slack, or Atlassian account access.

@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import zipfile
 
 REPO = Path(__file__).resolve().parents[1]
@@ -177,6 +178,22 @@ def find_release(repository, tag):
     return matches[0] if matches else None
 
 
+def find_created_release(repository, tag):
+    """Resolve a just-created draft by pending tag, tolerating API visibility delay."""
+    for attempt in range(3):
+        try:
+            metadata = json.loads(command(["gh", "release", "view", tag, "--repo", repository, "--json", "databaseId"]))
+            release_id = metadata.get("databaseId")
+            require(isinstance(release_id, int) and release_id > 0, "Invalid created release ID")
+            result = api(f"repos/{repository}/releases/{release_id}")
+            require(result.get("tag_name") == tag, "Created release tag mismatch")
+            return result
+        except (RuntimeError, ValueError, KeyError, TypeError):
+            if attempt == 2:
+                raise
+            time.sleep(2 * (attempt + 1))
+
+
 def verify_uploaded_assets(uploaded, assets):
     require(len(uploaded) == len(assets) and {item.get("name") for item in uploaded} == {path.name for path in assets}, "Uploaded release assets do not match")
     local = {path.name: path for path in assets}
@@ -199,8 +216,7 @@ def publish(repository, tag, commit, assets, notes):
     require_absent(f"repos/{repository}/git/ref/tags/{tag}")
     command(["gh", "release", "create", tag, *[str(path) for path in assets], "--repo", repository,
              "--draft", "--target", commit, "--title", "Claude Cloud Launchpad " + tag, "--notes-file", str(notes)], timeout=600)
-    release = find_release(repository, tag)
-    require(isinstance(release, dict), "Created draft release could not be found")
+    release = find_created_release(repository, tag)
     require(release.get("draft") is True and release.get("target_commitish") == commit, "Unexpected draft release target")
     verify_uploaded_assets(release.get("assets", []), assets)
     with tempfile.TemporaryDirectory(prefix="launchpad-release-download-") as temp:
@@ -215,7 +231,7 @@ def publish(repository, tag, commit, assets, notes):
     print("Published " + published["html_url"])
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-            summary.write(f"Published [{tag}]({published['html_url']}) from `{commit}` after validating eight jobs, twelve version reports, archive contents, and uploaded asset checksums.\n")
+            summary.write(f"Published [{tag}]({published['html_url']}) from `{commit}` after validating nine jobs, twelve version reports, archive contents, and uploaded asset checksums.\n")
 
 
 def main():
@@ -242,7 +258,7 @@ def main():
     runs = []
     for run_id, path, names in (
         (args.installation_run_id, ".github/workflows/installation-smoke.yml", {f"Native installation ({runner}, {profile})" for runner in RUNNERS for profile in PROFILES}),
-        (args.checks_run_id, ".github/workflows/checks.yml", {f"Repository checks ({runner})" for runner in RUNNERS}),
+        (args.checks_run_id, ".github/workflows/checks.yml", {f"Repository checks ({runner})" for runner in RUNNERS} | {"ShellCheck and Ruff"}),
     ):
         data = api(f"repos/{args.repository}/actions/runs/{run_id}")
         jobs = api(f"repos/{args.repository}/actions/runs/{run_id}/jobs?filter=latest&per_page=100")

@@ -1,0 +1,60 @@
+name: Publish release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Stable version tag matching VERSION
+        required: true
+        default: v1.0.0
+        type: string
+      installation_run_id:
+        description: Successful main Installation smoke test run ID for this exact commit
+        required: true
+        type: string
+      checks_run_id:
+        description: Successful main Repository checks run ID for this exact commit
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Verify and publish tested release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Require manual dispatch on main
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: test "$DISPATCH_REF" = refs/heads/main
+
+      - name: Check out the dispatched commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify test evidence, package sources, and publish verified assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          INSTALLATION_RUN_ID: ${{ inputs.installation_run_id }}
+          CHECKS_RUN_ID: ${{ inputs.checks_run_id }}
+        run: |
+          python3 scripts/package_release.py \
+            --repository "$RELEASE_REPOSITORY" \
+            --tag "$RELEASE_TAG" \
+            --installation-run-id "$INSTALLATION_RUN_ID" \
+            --checks-run-id "$CHECKS_RUN_ID" \
+            --artifact-dir "$RUNNER_TEMP/launchpad-release-evidence" \
+            --output-dir "$RUNNER_TEMP/launchpad-release-assets" \
+            --publish

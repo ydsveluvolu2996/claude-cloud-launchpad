@@ -353,6 +353,7 @@ def main():
         baseline_path.write_text(json.dumps(pricing, sort_keys=True), encoding="utf-8")
     report = {
         "verified_at": datetime.now(timezone.utc).isoformat(),
+        "commit": run([shutil.which("git"), "rev-parse", "HEAD"], REPO).strip(),
         "profile": args.profile,
         "platform": {"system": platform.system(), "release": platform.release(), "version": platform.version(), "machine": platform.machine()},
         "python": platform.python_version(),

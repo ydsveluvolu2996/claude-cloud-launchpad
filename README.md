@@ -1,5 +1,7 @@
 # Claude Cloud Launchpad
 
+[![Installation smoke test](https://github.com/ydsveluvolu2996/claude-cloud-launchpad/actions/workflows/installation-smoke.yml/badge.svg?branch=main)](https://github.com/ydsveluvolu2996/claude-cloud-launchpad/actions/workflows/installation-smoke.yml)
+
 A beginner-friendly way to add AWS, Terraform, collaboration, and design tools to Claude Code on **macOS or Windows**.
 
 [Start here](#start-here) · [macOS guide](#install-on-macos) · [Windows guide](#install-on-windows) · [First use](#try-your-first-session) · [Help](#troubleshooting)
@@ -323,9 +325,19 @@ To update installed plugin versions, use the update controls in `/plugin` inside
 
 ### What has been checked
 
-Bash syntax, JSON configuration, plugin/package availability, executable permissions, public cloning, and 11 isolated installer scenarios using simulated commands. These tests cover fresh setup, existing MCP settings, missing prerequisites, and installation failures. The installer returns a nonzero status when a required step fails.
+The [installation workflow](https://github.com/ydsveluvolu2996/claude-cloud-launchpad/actions/workflows/installation-smoke.yml) tests **real installations on native macOS and native Windows with Git Bash**. Open the latest run to see its result, platform details, and tool versions.
 
-Simulated tests do not install real plugins or authenticate services. Native Windows execution and live service connections still need verification on each user's machine. No AWS account access is included in this repository.
+Each job uses a fresh Claude profile and npm cache, installs the official Claude Code CLI and current Node.js LTS, then checks:
+
+- All nine plugins are installed and enabled at user scope, with their files present.
+- The pinned pricing connector is saved in the user profile.
+- The actual pricing server responds to MCP initialization and lists its tools.
+- Claude can connect using the registered `npx` command from a different folder.
+- Running the installer again succeeds and preserves the existing pricing configuration.
+
+Bash/JSON checks and earlier simulated failure-path tests supplement these real installation checks. Verification logs are available as workflow artifacts. The installer returns a nonzero status when a required step fails.
+
+These checks do not sign in to your service accounts, make model API calls, deploy resources, or invoke cloud tools. AWS, GitHub, Slack, Atlassian, Terraform, and optional diagram dependencies still need the feature-specific setup described above. A passing installation test does not certify those authenticated integrations for your accounts.
 
 ### Official references
 

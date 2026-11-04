@@ -25,13 +25,179 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
+class WindowsProcessJob:
+    """Own one suspended child and its descendants, including orphaned children."""
+
+    def __init__(self):
+        import ctypes
+        from ctypes import wintypes
+
+        self.ctypes = ctypes
+        self.api = ctypes.WinDLL("kernel32", use_last_error=True)
+        signatures = {
+            "CreateJobObjectW": ([ctypes.c_void_p, wintypes.LPCWSTR], wintypes.HANDLE),
+            "SetInformationJobObject": ([wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD], wintypes.BOOL),
+            "AssignProcessToJobObject": ([wintypes.HANDLE, wintypes.HANDLE], wintypes.BOOL),
+            "OpenProcess": ([wintypes.DWORD, wintypes.BOOL, wintypes.DWORD], wintypes.HANDLE),
+            "CreateToolhelp32Snapshot": ([wintypes.DWORD, wintypes.DWORD], wintypes.HANDLE),
+            "Thread32First": ([wintypes.HANDLE, ctypes.c_void_p], wintypes.BOOL),
+            "Thread32Next": ([wintypes.HANDLE, ctypes.c_void_p], wintypes.BOOL),
+            "OpenThread": ([wintypes.DWORD, wintypes.BOOL, wintypes.DWORD], wintypes.HANDLE),
+            "ResumeThread": ([wintypes.HANDLE], wintypes.DWORD),
+            "CloseHandle": ([wintypes.HANDLE], wintypes.BOOL),
+        }
+        for name, (arguments, result) in signatures.items():
+            function = getattr(self.api, name)
+            function.argtypes = arguments
+            function.restype = result
+
+        class BasicLimits(ctypes.Structure):
+            _fields_ = [
+                ("process_time", ctypes.c_longlong), ("job_time", ctypes.c_longlong),
+                ("flags", wintypes.DWORD), ("min_working_set", ctypes.c_size_t),
+                ("max_working_set", ctypes.c_size_t), ("active_processes", wintypes.DWORD),
+                ("affinity", ctypes.c_size_t), ("priority", wintypes.DWORD),
+                ("scheduling", wintypes.DWORD),
+            ]
+
+        class ExtendedLimits(ctypes.Structure):
+            _fields_ = [
+                ("basic", BasicLimits), ("io_counters", ctypes.c_ulonglong * 6),
+                ("process_memory", ctypes.c_size_t), ("job_memory", ctypes.c_size_t),
+                ("peak_process_memory", ctypes.c_size_t), ("peak_job_memory", ctypes.c_size_t),
+            ]
+
+        self.handle = self.api.CreateJobObjectW(None, None)
+        if not self.handle:
+            raise ctypes.WinError(ctypes.get_last_error())
+        limits = ExtendedLimits()
+        limits.basic.flags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if not self.api.SetInformationJobObject(self.handle, 9, ctypes.byref(limits), ctypes.sizeof(limits)):
+            error = ctypes.WinError(ctypes.get_last_error())
+            self.close()
+            raise error
+
+    def attach_and_resume(self, process):
+        from ctypes import wintypes
+
+        ctypes = self.ctypes
+        # The process is still suspended: it cannot spawn children before assignment.
+        handle = self.api.OpenProcess(0x0101, False, process.pid)  # SET_QUOTA | TERMINATE
+        if not handle:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            if not self.api.AssignProcessToJobObject(self.handle, handle):
+                raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            self.api.CloseHandle(handle)
+
+        class ThreadEntry(ctypes.Structure):
+            _fields_ = [
+                ("size", wintypes.DWORD), ("usage", wintypes.DWORD),
+                ("thread_id", wintypes.DWORD), ("process_id", wintypes.DWORD),
+                ("base_priority", wintypes.LONG), ("delta_priority", wintypes.LONG),
+                ("flags", wintypes.DWORD),
+            ]
+
+        snapshot = self.api.CreateToolhelp32Snapshot(0x00000004, 0)  # TH32CS_SNAPTHREAD
+        if snapshot == ctypes.c_void_p(-1).value:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            entry = ThreadEntry()
+            entry.size = ctypes.sizeof(entry)
+            found = self.api.Thread32First(snapshot, ctypes.byref(entry))
+            while found:
+                if entry.process_id == process.pid:
+                    thread = self.api.OpenThread(0x0002, False, entry.thread_id)  # SUSPEND_RESUME
+                    if not thread:
+                        raise ctypes.WinError(ctypes.get_last_error())
+                    try:
+                        if self.api.ResumeThread(thread) == 0xFFFFFFFF:
+                            raise ctypes.WinError(ctypes.get_last_error())
+                    finally:
+                        self.api.CloseHandle(thread)
+                    return
+                entry.size = ctypes.sizeof(entry)
+                found = self.api.Thread32Next(snapshot, ctypes.byref(entry))
+            raise RuntimeError("Could not find the test process's suspended initial thread")
+        finally:
+            self.api.CloseHandle(snapshot)
+
+    def close(self):
+        if self.handle:
+            if not self.api.CloseHandle(self.handle):
+                raise self.ctypes.WinError(self.ctypes.get_last_error())
+            self.handle = None
+
+
+def start_process(command, **options):
+    job = WindowsProcessJob() if os.name == "nt" else None
+    if job is not None:
+        # CREATE_SUSPENDED closes the race between spawning a child and owning its tree.
+        options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | 0x00000004
+    else:
+        options["start_new_session"] = True
+    try:
+        process = subprocess.Popen(command, **options)
+    except BaseException:
+        if job is not None:
+            job.close()
+        raise
+    process.verification_job = job
+    process.verification_owns_tree = True
+    try:
+        if job is not None:
+            job.attach_and_resume(process)
+    except BaseException:
+        try:
+            process.kill()  # This handle belongs only to the suspended test child.
+        finally:
+            finish_process(process)
+        raise
+    return process
+
+
+def finish_process(process, grace=0):
+    """Bound cleanup to a tree created by start_process, never the caller's group."""
+    require(getattr(process, "verification_owns_tree", False), "Refusing to clean up an unowned process tree")
+    if grace:
+        try:
+            process.wait(timeout=grace)
+        except subprocess.TimeoutExpired:
+            pass
+    if process.verification_job is not None:
+        # Closing the job also kills descendants after their original parent exits.
+        # No taskkill subprocess is needed, so cleanup cannot hang waiting for it.
+        process.verification_job.close()
+    else:
+        require(process.pid != os.getpgrp(), "Refusing to signal the caller's process group")
+        for sig in (signal.SIGTERM, signal.SIGKILL):
+            try:
+                os.killpg(process.pid, sig)
+            except ProcessLookupError:
+                break
+            if sig == signal.SIGTERM:
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    pass
+        # Always signal the group, even when its original parent has already exited.
+    process.wait(timeout=5)
+
+
 def run(command, cwd, timeout=180):
-    result = subprocess.run(
-        command, cwd=cwd, capture_output=True, text=True, encoding="utf-8",
-        errors="replace", timeout=timeout,
+    process = start_process(
+        command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, encoding="utf-8", errors="replace",
     )
-    require(result.returncode == 0, f"{command[0]} {command[1]} failed: {result.stderr[-2000:]}")
-    return result.stdout
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+        require(process.returncode == 0, f"{command[0]} {command[1]} failed: {stderr[-2000:]}")
+        return stdout
+    finally:
+        finish_process(process)
+        process.stdout.close()
+        process.stderr.close()
 
 
 def verify_plugins(claude, neutral):
@@ -71,11 +237,10 @@ def npx_launch_command():
 
 
 def check_pricing_protocol(neutral):
-    options = {"start_new_session": True} if os.name != "nt" else {}
-    process = subprocess.Popen(
+    process = start_process(
         npx_launch_command(), cwd=neutral, stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        encoding="utf-8", errors="replace", bufsize=1, **options,
+        encoding="utf-8", errors="replace", bufsize=1,
     )
     replies = queue.Queue()
     errors = []
@@ -93,8 +258,10 @@ def check_pricing_protocol(neutral):
             errors.append(line)
             del errors[:-30]
 
-    threading.Thread(target=read_stdout, daemon=True).start()
-    threading.Thread(target=read_stderr, daemon=True).start()
+    stdout_reader = threading.Thread(target=read_stdout, daemon=True)
+    stderr_reader = threading.Thread(target=read_stderr, daemon=True)
+    stdout_reader.start()
+    stderr_reader.start()
 
     def send(message):
         process.stdin.write(json.dumps({"jsonrpc": "2.0", **message}) + "\n")
@@ -133,21 +300,12 @@ def check_pricing_protocol(neutral):
                 process.stdin.close()
             except OSError:
                 pass
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            if os.name == "nt":
-                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True)
-            else:
-                os.killpg(process.pid, signal.SIGTERM)
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                if os.name != "nt":
-                    os.killpg(process.pid, signal.SIGKILL)
-                else:
-                    process.kill()
-                process.wait(timeout=5)
+        finish_process(process, grace=5)
+        stdout_reader.join(timeout=5)
+        stderr_reader.join(timeout=5)
+        require(not stdout_reader.is_alive() and not stderr_reader.is_alive(), "Pricing MCP output readers did not stop")
+        process.stdout.close()
+        process.stderr.close()
 
 
 def main():
@@ -163,8 +321,8 @@ def main():
     before = dict(pricing)
     baseline_path = config / "launchpad-test-pricing-baseline.json"
     if baseline_path.exists():
-        require(json.loads(baseline_path.read_text()) == pricing, "Repeated installation changed the existing MCP entry")
-        print("PASS repeated installation preserved the existing MCP entry", flush=True)
+        require(json.loads(baseline_path.read_text()) == pricing, "Pricing configuration changed since previous verification")
+        print("PASS pricing configuration unchanged since previous verification", flush=True)
     else:
         baseline_path.write_text(json.dumps(pricing, sort_keys=True), encoding="utf-8")
     print("PASS pricing MCP is saved in the isolated user profile", flush=True)

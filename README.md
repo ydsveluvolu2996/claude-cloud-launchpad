@@ -43,6 +43,8 @@ The guides use Full setup. To choose a smaller profile, replace their final `bas
 
 Before installing anything, the script checks that its required apps are available. It changes Claude settings for your **user account**, so installed tools are available from other project folders too.
 
+The guides below use **Git clone**, the recommended download method. Already downloaded the release ZIP? Complete your operating system's prerequisite and sign-in steps first, then use [Install from a downloaded ZIP](#install-from-a-downloaded-zip) instead of Step 5.
+
 ## Install on macOS
 
 ![Illustrated macOS setup: install Git and Node.js, open Terminal, install Claude Code, sign in, run setup, and verify.](docs/images/install-macos.png)
@@ -174,7 +176,36 @@ The clone command downloads **v1.0.0** and keeps the script's line endings compa
 
 **What success looks like:** the final summary says **`Done. Setup completed.`** If it says **`Finished with errors`**, use the error details below it or in the preceding output to fix the problem, then retry.
 
-Continue to the next section.
+Continue to [Check my setup](#check-my-setup).
+
+## Install from a downloaded ZIP
+
+This is an alternative to the `git clone` step, not a replacement for installing prerequisites. First complete **Steps 1–4** in the Mac or Windows guide above, including Git, Node.js, Claude Code, and sign-in.
+
+1. Open [the v1.0.0 release](https://github.com/ydsveluvolu2996/claude-cloud-launchpad/releases/tag/v1.0.0). Under **Assets**, download **`claude-cloud-launchpad-1.0.0.zip`**.
+2. Extract the ZIP using Finder on Mac or **Extract All** in File Explorer on Windows. Open the extracted folders until you see **`install.sh`**, **`doctor.sh`**, and **`profiles.json`** together. The archive's project folder is named `claude-cloud-launchpad-1.0.0`; your extraction app may place it inside another folder.
+3. Open your terminal in that project folder:
+
+   - **Mac:** open Terminal, type `cd` followed by a space, drag the project folder from Finder into Terminal, and press Return. [Apple explains dragging folder paths](https://support.apple.com/guide/terminal/trml106/mac).
+   - **Windows:** right-click the project folder in File Explorer and choose **Git Bash Here** / **Open Git Bash here**. This comes with the standalone Git for Windows installation. If the menu entry is unavailable, the recommended clone instructions above remain an alternative. [Git for Windows notes on Explorer integration](https://github.com/git-for-windows/build-extra/blob/main/portable/root/README.portable)
+
+4. Confirm that you opened the right folder:
+
+   ```bash
+   ls install.sh doctor.sh profiles.json
+   ```
+
+   It should list all three files. If it says a file is missing, return to the extracted folder that contains them before continuing.
+
+5. Run the installer and checker for **one** profile:
+
+   | Profile | Install | Check |
+   |---|---|---|
+   | Full | `bash install.sh` | `bash doctor.sh` |
+   | AWS | `bash install.sh --profile aws` | `bash doctor.sh --profile aws` |
+   | Collaboration | `bash install.sh --profile collaboration` | `bash doctor.sh --profile collaboration` |
+
+Continue to [Try your first session](#try-your-first-session) when the check passes. When another guide says `cd "$HOME/claude-cloud-launchpad"`, open your extracted project folder instead. ZIP downloads do not contain Git history, so use the ZIP update instructions below rather than `git fetch` or `git checkout`.
 
 ## Check my setup
 
@@ -186,7 +217,7 @@ Stay in the `claude-cloud-launchpad` folder, in **Terminal or Git Bash**. Run th
 | AWS | `bash doctor.sh --profile aws` |
 | Collaboration | `bash doctor.sh --profile collaboration` |
 
-The checker reports which prerequisites and selected plugins are ready. For Full and AWS, it also checks the user-scoped pricing connection. Its first connection may take longer while `npx` downloads the pricing package. Follow the next-step message for anything marked as needing setup, then run the check again.
+The checker reports which prerequisites and selected plugins are ready. For Full and AWS, it also checks the user-scoped pricing connection. Allow a couple of minutes for the first connection while `npx` downloads the pricing package. Follow the next-step message for anything marked as needing setup, then run the check again.
 
 The checker does not install plugins or edit your configuration. Connecting the pricing server can download its pinned package into npm's cache. It does not call cloud tools, make model requests, or sign in to your accounts. A successful check covers basic setup; optional service accounts still need the configuration below.
 
@@ -345,6 +376,8 @@ If you chose AWS or Collaboration, add the same `--profile aws` or `--profile co
 ## Update or remove this setup
 
 The beginner guides install a fixed release. Check [Releases](https://github.com/ydsveluvolu2996/claude-cloud-launchpad/releases) and read the next version's notes before updating. A Git tag pins Launchpad's files; it does **not** pin marketplace plugin versions or the Claude Code app.
+
+**If you installed from a ZIP:** download the next release's ZIP, extract it into a new folder, and run its installer and checker with the same profile. Keep any personal edits separately. The Git commands below apply only to a cloned repository.
 
 To return to the published v1.0.0 files, run these commands in **Terminal or Git Bash**:
 

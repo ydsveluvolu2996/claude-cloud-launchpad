@@ -49,8 +49,10 @@ else
 fi
 
 if [ -n "$PRICING_NAME" ]; then
-  echo "Checking the pricing connection (the first check may download its package)..."
-  if pricing_status=$(claude mcp get "$PRICING_NAME" 2>/dev/null); then
+  echo "Checking the pricing connection (the first download can take a couple of minutes)..."
+  # Give a cold npm cache time to download the connector; respect an explicit override.
+  # This applies only to this check and does not change the user's Claude settings.
+  if pricing_status=$(MCP_TIMEOUT="${MCP_TIMEOUT:-120000}" claude mcp get "$PRICING_NAME" 2>/dev/null); then
     if printf '%s' "$pricing_status" | node -e '
 const fs = require("fs");
 const status = fs.readFileSync(0, "utf8").replace(/\x1b\[[0-9;]*m/g, "");

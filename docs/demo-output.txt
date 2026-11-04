@@ -19,7 +19,7 @@ PASS atlassian is installed and enabled.
 PASS slack is installed and enabled.
 PASS session-report is installed and enabled.
 PASS design is installed and enabled.
-Checking the pricing connection (the first check may download its package)...
+Checking the pricing connection (the first download can take a couple of minutes)...
 PASS Pricing connector is connected from outside this setup folder.
 
 Your selected Launchpad setup is ready.

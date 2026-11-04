@@ -19,8 +19,8 @@ from pathlib import Path
 import sys
 kind, *args = sys.argv[1:]
 state_path = Path(os.environ["LAUNCHPAD_TEST_STATE"])
-state = json.loads(state_path.read_text())
-with Path(os.environ["LAUNCHPAD_TEST_LOG"]).open("a") as log:
+state = json.loads(state_path.read_text(encoding="utf-8"))
+with Path(os.environ["LAUNCHPAD_TEST_LOG"]).open("a", encoding="utf-8") as log:
     log.write(json.dumps({"kind":kind,"args":args,"cwd":os.getcwd()})+"\n")
 if kind != "claude":
     print(kind + " fixture version")
@@ -67,7 +67,7 @@ elif args[:2] == ["mcp", "add"]:
 else:
     print("Unexpected fixture call: "+repr(args),file=sys.stderr)
     sys.exit(2)
-state_path.write_text(json.dumps(state))
+state_path.write_text(json.dumps(state), encoding="utf-8")
 '''
 
 
@@ -83,9 +83,9 @@ class SetupTests(unittest.TestCase):
         self.bin = self.root / "fixture bin"
         self.bin.mkdir()
         self.fixture = self.root / "fixture.py"
-        self.fixture.write_text(FIXTURE)
+        self.fixture.write_text(FIXTURE, encoding="utf-8")
         self.state = self.root / "state.json"
-        self.state.write_text(json.dumps({"plugins":[]}))
+        self.state.write_text(json.dumps({"plugins":[]}), encoding="utf-8")
         self.log = self.root / "calls.jsonl"
         self.config = self.root / "isolated claude profile"
         self.config.mkdir()
@@ -112,7 +112,7 @@ class SetupTests(unittest.TestCase):
             executable = shutil.which(command)
             self.assertIsNotNone(executable, command + " is required")
             self.wrapper(command, 'exec "' + Path(executable).as_posix() + '" "$@"')
-        self.profiles = json.loads((REPO / "profiles.json").read_text())
+        self.profiles = json.loads((REPO / "profiles.json").read_text(encoding="utf-8"))
 
     def tearDown(self):
         self.temp.cleanup()
@@ -128,13 +128,13 @@ class SetupTests(unittest.TestCase):
                               encoding="utf-8", errors="replace", capture_output=True, timeout=45)
 
     def calls(self):
-        return [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
+        return [json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines()] if self.log.exists() else []
 
     def saved(self):
-        return json.loads(self.state.read_text())
+        return json.loads(self.state.read_text(encoding="utf-8"))
 
     def save(self, value):
-        self.state.write_text(json.dumps(value))
+        self.state.write_text(json.dumps(value), encoding="utf-8")
 
     def assert_success(self, result):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -171,7 +171,7 @@ class SetupTests(unittest.TestCase):
         for command in ("git", "node", "claude", "npx"):
             with self.subTest(command=command):
                 path = self.bin / command
-                old = path.read_text()
+                old = path.read_text(encoding="utf-8")
                 path.unlink()
                 try:
                     result = self.call()
@@ -207,7 +207,7 @@ class SetupTests(unittest.TestCase):
     def test_project_tmpdir_cannot_hide_missing_user_pricing(self):
         project_temp = self.checkout / "custom temp"
         project_temp.mkdir()
-        (self.checkout / ".mcp.json").write_text('{"mcpServers":{"aws-pricing-calculator":{}}}')
+        (self.checkout / ".mcp.json").write_text('{"mcpServers":{"aws-pricing-calculator":{}}}', encoding="utf-8")
         (self.checkout / ".git").mkdir()
         self.env.update({"TMPDIR":str(project_temp), "TMP":str(project_temp), "TEMP":str(project_temp)})
         self.assert_success(self.call("install", "--profile", "aws"))
@@ -281,7 +281,7 @@ class SetupTests(unittest.TestCase):
                 self.assertNotIn("NEVER_LEAK_TOKEN", result.stdout + result.stderr)
 
     def test_invalid_manifest_does_not_make_changes(self):
-        (self.checkout / "profiles.json").write_text('{"broken":true}')
+        (self.checkout / "profiles.json").write_text('{"broken":true}', encoding="utf-8")
         result = self.call()
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.calls(), [])
